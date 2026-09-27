@@ -36,6 +36,7 @@
 | 水量水质 | 有效水量→每周换水建议；GH/KH 调配（RO 兑水 + 矿物盐双方案）；CO₂ 需求（泡/秒，标注经验估算）；pH-KH-CO₂ 关系表 |
 | 设备匹配 | 照明（流明/面积判定低中高光 + 水草需求交叉校验爆藻风险）、过滤（5~8 倍流量）、加热棒（按温差估算） |
 | 兼容性检查 | 逐对检查混养冲突（攻击性、体长差 3 倍、水温/GH/pH 无交集、啃草、群游不足），输出原因；密度校验（1cm/1~2L 经验值，不阻断） |
+| 采购预算 | 底砂按袋、水草按盆、矿物盐按包、鱼按群：实际用量**向上取整到整包**，单列多出量与折合单价；价格用户自填，**未填标"待报价"而非按 0**；总计与类别小计；方案改材质/株数/尾数自动重算；两种底砂混用分两行、同种包装合并 |
 | 导出 | 造景平面图 SVG 下载（含尺寸标注）、物料清单（底砂 kg/水草株数/鱼数/设备参数）、养护参数卡（A4 打印） |
 
 ### 3.2 进阶功能
@@ -55,6 +56,7 @@
 | `#/plan/:id/water` | 水质与设备计算（GH/KH、CO₂、灯、过滤、加热） |
 | `#/plan/:id/stocking` | 生物清单与兼容性检查 |
 | `#/plan/:id/bom` | 物料清单与参数卡（可打印） |
+| `#/plan/:id/budget` | 采购预算（用量→整包取整、多出量、折合单价、总计/小计） |
 | `#/library` | 素材库（水草/鱼种/硬景观/底砂，搜索过滤） |
 
 ## 5. 技术栈与目录结构
@@ -149,6 +151,15 @@ app-025/
 
 - 小型鱼（平均成体 3cm）1cm/1L，大型鱼（10cm）1cm/2L，中间线性过渡；超标仅提示为建议。
 
+### 6.7 采购预算（用量 → 市售整包）
+
+- 包装类别：底砂 kg/袋（默认 5）、水草 株/盆（默认 10）、矿物盐 g/包（默认 100）、鱼 尾/群（默认 10），包装容量可按实际市售规格改。
+- 要买件数 = ⌈实际用量 ÷ 包装容量⌉；买量 = 件数 × 包装容量；多出 = 买量 − 用量（单列，不为负数）。
+- 行花费 = 件数 × 整包单价；折合单价 = 行花费 ÷ **实际用量**（把多买浪费摊进实际用量）；多出部分另标浪费金额。
+- 矿物盐仅在目标 GH > 自来水 GH 时出现，克重 = ΔGH × 有效水量 ÷ 盐贡献（盐种可换）。
+- 两种底砂混用时底砂层体积按比例（`budget.sub2Ratio`）分摊到两种材质、各乘各的密度，**分两行**；同名水草/同鱼种的用量**合并同种包装**为一行。
+- 单价未填 → 行标"待报价"且不计入合计（显示"¥x 起"），绝不按 0 元；所有报价补齐后总计才定稿。
+
 ## 7. 快速开始
 
 ```bash
@@ -165,9 +176,9 @@ npm run preview    # 预览构建产物：http://localhost:4173
 
 | 层级 | 框架 | 结果 | 覆盖 |
 |---|---|---|---|
-| 核心计算单测 | Vitest | **139/139 通过** | 50 组随机缸体/底砂与手工核算误差 ≤2%；20 组 GH 方向与公式；CO₂ 反解往返一致且带估算标注；24 组兼容性（攻击性×温和、体长差 5 倍、区间无交集、群游 3 尾等全部检出并给出原因）；密度超标提示不阻断；BOM 完整性 |
-| 组件交互测试 | Testing Library（含在 139 内） | 16 用例 | 方案创建、素材增删改、RO/加盐切换、兼容冲突检出、清单内容、SVG 导出 |
-| E2E | Playwright（Chromium） | preview **3/3**，容器 **4/4** | 验收主流程「设缸体→摆素材→算水质→查混养→导出清单」、方案持久化（刷新不丢）、素材库搜索、healthz |
+| 核心计算单测 | Vitest | **163/163 通过** | 50 组随机缸体/底砂与手工核算误差 ≤2%；20 组 GH 方向与公式；CO₂ 反解往返一致且带估算标注；24 组兼容性（攻击性×温和、体长差 5 倍、区间无交集、群游 3 尾等全部检出并给出原因）；密度超标提示不阻断；BOM 完整性；**采购预算 17 组（整包取整、多出/折合单价、待报价不按 0、材质/株数/尾数重算、混砂两行、同种合并）** |
+| 组件交互测试 | Testing Library（含在 163 内） | 23 用例 | 方案创建、素材增删改、RO/加盐切换、兼容冲突检出、清单内容、SVG 导出；**预算填价联动、类别筛选、包装容量改取整、鱼尾数重算、混砂开关** |
+| E2E | Playwright（Chromium） | preview **5/5**，容器 **6/6** | 验收主流程「设缸体→摆素材→算水质→查混养→导出清单」、方案持久化（刷新不丢）、素材库搜索、**采购预算全流程**、healthz |
 
 ```bash
 npm test                      # 单元 + 组件测试
@@ -206,10 +217,15 @@ type Item = { id: string; kind: 'hardscape'|'plant'; name: string;
 type Fish = { id: string; name: string; adultCm: number; minTankL: number; tempRange: [number, number];
               ghRange: [number, number]; phRange: [number, number]; temperament: 'peaceful'|'semi'|'aggressive';
               plantNip: boolean; schooling: boolean; minSchool?: number; singleMale?: boolean };
-type Plan = { id: string; name: string; tank: Tank; substrate: Substrate; items: Item[];
+type Plan = { id: string; name: string; tank: Tank; substrate: Substrate;
+              substrate2?: Substrate /* 混用的第二种底砂 */;
+              items: Item[];
               fishes: { fishId: string; count: number }[];
               water: { tapGh: number; tapKh: number; targetGh: number; targetCo2Ppm: number;
                        roomTempC: number; targetTempC: number };
+              budget?: { sub2Ratio?: number /* 第二底砂占比 0~1 */; salt?: string;
+                        entries: Record<string /* sub:<kind>/plant:<名>/salt:<名>/fish:<id> */,
+                          { packSize?: number /* 市售包装容量 */; packPrice?: number /* 整包单价，缺省=待报价 */ }> };
               updatedAt: number };
 ```
 
@@ -230,6 +246,7 @@ type Plan = { id: string; name: string; tank: Tank; substrate: Substrate; items:
 | 兼容性检查 | 30 组混养用例（攻击性+温和、体长差、区间无交集、群游不足）全部检出并给出原因 | ✅ tests/compatibility.test.ts |
 | 密度校验 | 超阈值给提示，不阻断，标注为建议 | ✅ tests/compatibility.test.ts |
 | 导出物料清单 | 底砂 kg、水草株数、鱼数、设备参数齐备；A4 打印排版 | ✅ tests/bom.test.ts + E2E |
+| 采购预算 | 用量按袋/盆/包/群向上取整、多出与折合单价单列、未填价标待报价、混砂两行同种合并、改动重算 | ✅ tests/budget.test.ts（17）+ 组件 7 + E2E |
 | Docker | healthz 通、镜像 <60MB | ✅ 实测 21.9MB |
 | E2E 主流程 | 设缸体→摆素材→算水质→查混养→导出物料清单 | ✅ e2e/planner.spec.ts |
 

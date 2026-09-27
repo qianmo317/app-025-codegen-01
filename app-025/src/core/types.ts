@@ -57,15 +57,38 @@ export type WaterConfig = {
   targetTempC: number;
 };
 
+export type BudgetCategory = '底砂' | '水草' | '矿物盐' | '鱼';
+
 export type Plan = {
   id: string;
   name: string;
   tank: Tank;
   substrate: Substrate;
+  /** 混用的第二种底砂；存在时按 budget.sub2Ratio 与主底砂分摊底砂层 */
+  substrate2?: Substrate;
   items: Item[];
   fishes: { fishId: string; count: number }[];
   water: WaterConfig;
+  /** 采购预算页的市售包装/单价配置（按 key 存用户填写值，缺省视为未填） */
+  budget?: BudgetConfig;
   updatedAt: number;
+};
+
+/** 预算页单项配置：同 key 的用量会合并为同一采购行 */
+export type BudgetEntryConfig = {
+  /** 市售包装容量（底砂 kg/袋、水草 株/盆、矿物盐 g/包、鱼 尾/群）；undefined 用类别默认 */
+  packSize?: number;
+  /** 整包单价；undefined 表示用户还没填，按"待报价"处理而非 0 */
+  packPrice?: number;
+};
+
+export type BudgetConfig = {
+  /** 第二种底砂占底砂层的比例（0~1）；仅 substrate2 存在时生效 */
+  sub2Ratio?: number;
+  /** 选用的矿物盐（GH_SALTS 的 salt 名；默认无水氯化钙） */
+  salt?: string;
+  /** key 规则：底砂=sub:<kind>，水草=plant:<id 或名称>，矿物盐=salt:<名称>，鱼=fish:<id> */
+  entries: Record<string, BudgetEntryConfig>;
 };
 
 export const EMPTY_WATER: WaterConfig = {

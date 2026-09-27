@@ -167,6 +167,59 @@ test.describe('水族造景规划器 E2E', () => {
     expect(count).toBeLessThan(26);
   });
 
+  test('采购预算：整包取整、待报价提示、混砂两行、价格联动合计', async ({ page }) => {
+    await openPlan(page);
+
+    // 底砂 ADA 50+60mm
+    await page.getByTestId('sub-kind').selectOption('ada');
+    await page.getByTestId('sub-thickness').fill('50');
+    await page.getByTestId('sub-slope').fill('60');
+
+    // 混用河沙，占 50%
+    await page.getByTestId('sub-mix').check();
+    await page.locator('#sub2-panel').waitFor();
+    await page.getByTestId('sub2-kind').selectOption('sand');
+    await page.getByTestId('sub2-ratio').fill('50');
+
+    // 水草红宫廷 20 株 + 鱼宝莲灯 10 尾
+    await page.getByTestId('add-plant-p-ludwigia').click();
+    await page.getByRole('link', { name: '生物兼容' }).first().click();
+    await page.getByTestId('fish-select').selectOption('f-cardinal-tetra');
+    await page.getByTestId('add-fish').click();
+
+    await page.getByRole('link', { name: '采购预算' }).first().click();
+    await expect(page.getByTestId('budget-page')).toBeVisible();
+
+    // 两种底砂分两行
+    const subRows = page.getByTestId('budget-line-底砂');
+    await expect(subRows).toHaveCount(2);
+    // 默认 5kg/袋：12.42kg→3 袋，17.28kg→4 袋
+    await expect(page.getByTestId('budget-table')).toContainText('3 袋（15 kg）');
+    await expect(page.getByTestId('budget-table')).toContainText('4 袋（20 kg）');
+    // 用量与买量并排，多出单列
+    await expect(page.getByTestId('budget-table')).toContainText('水草');
+    await expect(page.getByTestId('budget-table')).toContainText('2 盆（20 株）');
+    await expect(page.getByTestId('budget-table')).toContainText('1 群（10 尾）');
+
+    // 未填价格：总计待报价提示，金额"起"
+    await expect(page.getByTestId('grand-missing')).toContainText('待报价');
+    await expect(page.getByTestId('grand-total')).toContainText('起');
+
+    // 给 ADA 行填整包单价 50 → 3×50=150；河沙行填 40 → 4×40=160
+    const adaRow = subRows.filter({ hasText: 'ADA' });
+    await adaRow.getByTestId('pack-price').fill('50');
+    const sandRow = subRows.filter({ hasText: '河沙' });
+    await sandRow.getByTestId('pack-price').fill('40');
+    await expect(page.getByTestId('cat-底砂')).toContainText('¥310.00');
+    // 还有水草/鱼未报价 → 总计仍带"起"
+    await expect(page.getByTestId('grand-total')).toContainText('¥310.00 起');
+
+    // 类别筛选：只看鱼
+    await page.getByTestId('cat-鱼').click();
+    await expect(page.getByTestId('budget-line-鱼')).toHaveCount(1);
+    await expect(page.getByTestId('budget-line-水草')).toHaveCount(0);
+  });
+
   test('healthz 由 nginx 提供（Docker 场景断言，preview 下跳过）', async ({ page, baseURL }) => {
     test.skip(!baseURL!.includes(':8105'), '仅在 Docker 容器场景运行');
     const res = await page.request.get('/healthz');

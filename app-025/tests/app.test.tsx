@@ -257,6 +257,144 @@ describe('物料清单页', () => {
   });
 });
 
+describe('采购预算页', () => {
+  beforeEach(() => {
+    localStorage.clear();
+  });
+
+  async function seedBudgetPlan(over = {}) {
+    const plan = newPlan('预算测试');
+    upsertPlan({
+      ...plan,
+      substrate: { kind: 'ada', densityKgPerL: 1.15, thicknessMm: 50, slopeMm: 60 },
+      items: [
+        { id: 'i2', kind: 'plant', name: '红宫廷', x: 30, y: 10, scaleCm: 25, rotDeg: 0, layer: 'back', lightNeed: 'high', growth: 'fast', qty: 20 },
+        { id: 'i3', kind: 'plant', name: '小水榕', x: 10, y: 15, scaleCm: 8, rotDeg: 0, layer: 'front', lightNeed: 'low', growth: 'slow', qty: 3 },
+      ],
+      fishes: [{ fishId: 'f-cardinal-tetra', count: 10 }],
+      ...over,
+    });
+    window.location.hash = `/plan/${plan.id}/budget`;
+    render(<App />);
+    await screen.findByTestId('budget-page');
+    return plan;
+  }
+
+  it('用量与买量并排显示，未填价格标待报价且不按 0 算', async () => {
+    await seedBudgetPlan();
+    const table = screen.getByTestId('budget-table');
+    expect(table.textContent).toContain('24.8 kg'); // 底砂用量
+    expect(table.textContent).toContain('5 袋（25 kg）'); // 买量上取整
+    expect(table.textContent).toContain('20 株');
+    expect(table.textContent).toContain('2 盆（20 株）');
+    // 未填价格：行花费列显示待报价，总计提示几项未填
+    expect(screen.getAllByText('待报价').length).toBeGreaterThan(0);
+    expect(screen.getByTestId('grand-missing').textContent).toContain('待报价');
+    expect(screen.getByTestId('grand-total').textContent).toContain('起');
+  });
+
+  it('填价格后出行花费、合计与类别小计；折合单价含浪费摊分', async () => {
+    const plan = await seedBudgetPlan();
+    // 给底砂行填价：5 袋 × ¥50
+    const lines = screen.getAllByTestId('budget-line-底砂');
+    expect(lines.length).toBe(1);
+    const price = lines[0].querySelector('[data-testid="pack-price"]') as HTMLInputElement;
+    await userEvent.clear(price);
+    await userEvent.type(price, '50');
+    expect(lines[0].querySelector('[data-testid="line-cost"]')!.textContent).toBe('¥250.00');
+    // 类别小计 ¥250，总计仍是"起"（其他行未报价）
+    expect(screen.getByTestId('cat-底砂').textContent).toContain('¥250.00');
+    expect(screen.getByTestId('grand-total').textContent).toContain('¥250.00 起');
+    // 折合单价 ≈ 250/24.84 = 10.06 元/kg
+    expect(lines[0].querySelector('[data-testid="effective-unit"]')!.textContent).toContain('¥10.06');
+    // 持久化：刷新后价格仍在
+    window.location.hash = `/plan/${plan.id}/budget`;
+    expect((await screen.findByTestId('budget-page'))).toBeInTheDocument();
+  });
+
+  it('目标 GH 高于自来水时出现矿物盐行，换盐种后克重重算', async () => {
+    await seedBudgetPlan({
+      water: { tapGh: 12, tapKh: 6, targetGh: 18, targetCo2Ppm: 25, roomTempC: 24, targetTempC: 26 },
+    });
+    expect(screen.getByTestId('salt-picker')).toBeInTheDocument();
+    const saltRow = screen.getByTestId('budget-line-矿物盐');
+    expect(saltRow.textContent).toContain('包');
+    const demandBefore = saltRow.querySelector('[data-testid="demand"]')!.textContent;
+    expect(Number(demandBefore!.match(/[\d.]+/)![0])).toBeGreaterThan(900);
+    // 切到硫酸镁（贡献 0.23）→ 用量显著增加
+    await userEvent.selectOptions(screen.getByTestId('salt-select'), '硫酸镁 MgSO₄·7H₂O(泻盐)');
+    const after = screen.getByTestId('budget-line-矿物盐').querySelector('[data-testid="demand"]')!.textContent;
+    expect(Number(after!.match(/[\d.]+/)![0])).toBeGreaterThan(2000);
+  });
+
+  it('类别筛选卡片可只看小计类别', async () => {
+    await seedBudgetPlan();
+    await userEvent.click(screen.getByTestId('cat-鱼'));
+    const rows = screen.getAllByTestId(/budget-line/);
+    expect(rows.length).toBe(1);
+    expect(rows[0].textContent).toContain('宝莲灯灯鱼');
+  });
+
+  it('改包装容量 → 买量按新包装取整；清空后回退默认', async () => {
+    await seedBudgetPlan();
+    const rongRow = screen
+      .getAllByTestId('budget-line-水草')
+      .find((r) => (r as HTMLElement).dataset.budgetKey === 'plant:小水榕')!;
+    expect(rongRow.querySelector('[data-testid="bought"]')!.textContent).toBe('1 盆（10 株）');
+    const pack = rongRow.querySelector('[data-testid="pack-size"]') as HTMLInputElement;
+    fireEvent.change(pack, { target: { value: '2' } });
+    expect(rongRow.querySelector('[data-testid="bought"]')!.textContent).toBe('2 盆（4 株）');
+    expect(rongRow.querySelector('[data-testid="surplus"]')!.textContent).toContain('1 株');
+    fireEvent.change(pack, { target: { value: '' } });
+    expect(rongRow.querySelector('[data-testid="bought"]')!.textContent).toBe('1 盆（10 株）');
+  });
+
+  it('方案改动自动重算：编辑器改鱼尾数后预算群数更新', async () => {
+    const plan = newPlan('联动重算');
+    upsertPlan({ ...plan, fishes: [{ fishId: 'f-cardinal-tetra', count: 10 }] });
+    window.location.hash = `/plan/${plan.id}/budget`;
+    render(<App />);
+    await screen.findByTestId('budget-page');
+    let fishRow = screen.getByTestId('budget-line-鱼');
+    expect(fishRow.querySelector('[data-testid="bought"]')!.textContent).toBe('1 群（10 尾）');
+    // 到生物页 +12 尾（共 22 尾）
+    window.location.hash = `/plan/${plan.id}/stocking`;
+    await screen.findByTestId('stocking-page');
+    for (let i = 0; i < 12; i++) await userEvent.click(screen.getByTestId('inc-f-cardinal-tetra'));
+    // 回预算：22 尾 / 10 → 3 群，多出 8 尾
+    window.location.hash = `/plan/${plan.id}/budget`;
+    await screen.findByTestId('budget-page');
+    fishRow = screen.getByTestId('budget-line-鱼');
+    expect(fishRow.querySelector('[data-testid="bought"]')!.textContent).toBe('3 群（30 尾）');
+    expect(fishRow.querySelector('[data-testid="surplus"]')!.textContent).toContain('8 尾');
+  });
+
+  it('混用两种底砂：预算分两行，关掉混用恢复一行', async () => {
+    const plan = newPlan('混砂预算');
+    upsertPlan(plan);
+    window.location.hash = `/plan/${plan.id}`;
+    render(<App />);
+    await screen.findByTestId('editor');
+    await userEvent.click(screen.getByTestId('sub-mix'));
+    await screen.findByTestId('sub2-panel');
+    await userEvent.selectOptions(screen.getByTestId('sub2-kind'), 'sand');
+    await userEvent.clear(screen.getByTestId('sub2-ratio'));
+    await userEvent.type(screen.getByTestId('sub2-ratio'), '50');
+    // 进预算页：底砂两行
+    await userEvent.click(screen.getAllByRole('link', { name: '采购预算' })[0]);
+    await screen.findByTestId('budget-page');
+    expect(screen.getAllByTestId('budget-line-底砂').length).toBe(2);
+    // 回编辑器关掉混用
+    window.location.hash = `/plan/${plan.id}`;
+    await screen.findByTestId('editor');
+    await userEvent.click(screen.getByTestId('sub-mix'));
+    expect(screen.queryByTestId('sub2-panel')).toBeNull();
+    window.location.hash = `/plan/${plan.id}/budget`;
+    await screen.findByTestId('budget-page');
+    expect(screen.getAllByTestId('budget-line-底砂').length).toBe(1);
+  });
+});
+
 describe('素材库页', () => {
   it('切 tab 与搜索过滤', async () => {
     window.location.hash = '/library';

@@ -14,6 +14,7 @@ import Editor from './pages/Editor';
 import Water from './pages/Water';
 import Stocking from './pages/Stocking';
 import Bom from './pages/Bom';
+import BudgetPage from './pages/Budget';
 import Library from './pages/Library';
 
 export function usePlans() {
@@ -47,6 +48,11 @@ export default function App() {
     case 'bom': {
       const plan = getPlan(route.id);
       page = plan ? <Bom plan={plan} /> : <NotFound />;
+      break;
+    }
+    case 'budget': {
+      const plan = getPlan(route.id);
+      page = plan ? <BudgetPage plan={plan} /> : <NotFound />;
       break;
     }
     case 'library':

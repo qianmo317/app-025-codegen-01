@@ -36,6 +36,9 @@ export default function Bom({ plan }: { plan: Plan }) {
           生物兼容
         </Link>
         <span className="tab active">物料清单</span>
+        <Link to={`/plan/${plan.id}/budget`} className="tab">
+          采购预算
+        </Link>
       </nav>
       <h1>物料清单与养护参数卡（{plan.name}）</h1>
 

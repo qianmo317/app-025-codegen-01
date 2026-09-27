@@ -6,7 +6,7 @@
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
-│  页面层 pages/（PlanList · Editor · Water · Stocking · Bom · Library）
+│  页面层 pages/（PlanList · Editor · Water · Stocking · Bom · Budget · Library）
 │  只做：展示计算结果 + 收集用户动作；不写业务公式
 ├─────────────────────────────────────────────────────────────┤
 │  组件层 components/Canvas.tsx
@@ -66,6 +66,7 @@ App.tsx: useSyncExternalStore(subscribePlans, getPlans) ──▶ 触发重渲�
 | `{ name: 'water', id }` | Water |
 | `{ name: 'stocking', id }` | Stocking |
 | `{ name: 'bom', id }` | Bom |
+| `{ name: 'budget', id }` | Budget |
 | `{ name: 'library' }` | Library |
 
 ## 4. 画布渲染与交互（components/Canvas.tsx）
@@ -89,6 +90,7 @@ App.tsx: useSyncExternalStore(subscribePlans, getPlans) ──▶ 触发重渲�
 | equipment.ts | `classifyLightByLumen` `recommendLumens` `recommendWatts` `checkLight` `filterFlowLph` `heaterWatts` `suggestGlassMm` `equipmentSummary` | 光照三档判定 + 水草需求交叉校验；过滤 5~8 倍；加热 W = L×ΔT×0.12 |
 | compatibility.ts | `rangesOverlap` `checkPair` `checkSchooling` `checkTankSize` `checkDensity` `checkStocking` | 逐对 5 条规则 + 附加规则，输出 `StockingIssue[]`（severity/conflict·warning·info + code + message） |
 | bom.ts | `buildBom` | 汇总底砂/水草/硬景观/生物/设备行 + 养护参数卡 |
+| budget.ts | `buildBudget` `formatDemand` `sub2Ratio` `chosenSalt` | 采购预算：用量按袋/盆/包/群向上取整、同种包装合并、混砂两行、未填价"待报价"、折合单价与总计/小计 |
 
 可配参数集中以常量或数据表存在（`GH_SALTS`、`LIGHT_LUMEN_PER_M2`、`WL_RANGE`、底砂密度表、硬景观排水系数），便于调参与测试边界。
 

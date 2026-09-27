@@ -58,9 +58,9 @@ export function roMixForGh(tapGh: number, targetGh: number, totalL: number): RoM
 }
 
 /** 加矿物盐（升 GH）：m(g) = ΔGH × V(L) / 盐的 GH 贡献(gH per g per L) */
-export function saltForGh(tapGh: number, targetGh: number, totalL: number): SaltDose | null {
+export function saltForGh(tapGh: number, targetGh: number, totalL: number, saltName?: string): SaltDose | null {
   if (totalL <= 0 || targetGh <= tapGh) return null;
-  const salt = GH_SALTS[0]; // 默认无水氯化钙
+  const salt = GH_SALTS.find((s) => s.salt === saltName) ?? GH_SALTS[0]; // 默认无水氯化钙
   const grams = ((targetGh - tapGh) * totalL) / salt.ghPerGramPerL;
   return {
     grams,

@@ -62,6 +62,9 @@ export default function Stocking({ plan }: { plan: Plan }) {
         <Link to={`/plan/${plan.id}/bom`} className="tab">
           物料清单 →
         </Link>
+        <Link to={`/plan/${plan.id}/budget`} className="tab">
+          采购预算
+        </Link>
       </nav>
       <h1>生物清单与兼容性检查（{plan.name}）</h1>
       <p className="muted">有效水量 {eff.toFixed(1)}L · {hasPlants ? '草缸' : '无植物'}</p>

@@ -54,6 +54,9 @@ export default function Water({ plan }: { plan: Plan }) {
         <Link to={`/plan/${plan.id}/stocking`} className="tab">
           生物兼容 →
         </Link>
+        <Link to={`/plan/${plan.id}/budget`} className="tab">
+          采购预算
+        </Link>
       </nav>
       <h1>水质与设备计算（{plan.name}）</h1>
       <p className="muted">

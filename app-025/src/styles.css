@@ -380,3 +380,44 @@ label.chk {
     margin: 12mm;
   }
 }
+
+/* 采购预算页 */
+.missing-price {
+  color: var(--danger);
+  font-weight: 600;
+}
+.surplus {
+  color: #b9770e;
+  white-space: nowrap;
+}
+.budget-summary {
+  margin: 12px 0;
+}
+.budget-summary .card2 {
+  text-align: left;
+  cursor: pointer;
+  font: inherit;
+  border: 1px solid var(--line);
+}
+.budget-summary .card2.picked {
+  border-color: var(--primary);
+  box-shadow: 0 0 0 1px var(--primary) inset;
+}
+.budget-table {
+  min-width: 980px;
+}
+.budget-table input.num-sm {
+  width: 72px;
+  padding: 3px 6px;
+}
+.pack-input {
+  gap: 3px;
+  flex-wrap: nowrap;
+}
+.price-missing-input {
+  border-color: #e4b6b0;
+  background: var(--warn-bg);
+}
+.budget-table {
+  display: table;
+}

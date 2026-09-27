@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import type { Plan, Item } from '../core/types';
+import type { Plan, Item, Substrate } from '../core/types';
 import Canvas, { occlusionWarnings } from '../components/Canvas';
 import { updatePlan } from '../state/plans';
 import { PLANTS, HARDSCAPES, SUBSTRATES } from '../data/db';
@@ -76,6 +76,30 @@ export default function Editor({ plan }: { plan: Plan }) {
   function patchSub(patch: Partial<Plan['substrate']>) {
     updatePlan(plan.id, { substrate: { ...plan.substrate, ...patch } });
   }
+  function patchSub2(patch: Partial<Substrate>) {
+    if (!plan.substrate2) return;
+    updatePlan(plan.id, { substrate2: { ...plan.substrate2, ...patch } });
+  }
+  function toggleMixSubstrate(on: boolean) {
+    if (on) {
+      // 新增混用时给一个与主材质不同的默认（陶粒砂常与水草泥混用），占 30%
+      const preset = SUBSTRATES.find((s) => s.kind !== plan.substrate.kind) ?? SUBSTRATES[1];
+      updatePlan(plan.id, {
+        substrate2: {
+          kind: preset.kind,
+          densityKgPerL: preset.densityKgPerL,
+          thicknessMm: plan.substrate.thicknessMm,
+          slopeMm: 0,
+        },
+        budget: { entries: {}, ...plan.budget, sub2Ratio: plan.budget?.sub2Ratio ?? 0.3 },
+      });
+    } else {
+      updatePlan(plan.id, { substrate2: undefined });
+    }
+  }
+  function setSub2Ratio(pct: number) {
+    updatePlan(plan.id, { budget: { entries: {}, ...plan.budget, sub2Ratio: pct / 100 } });
+  }
 
   return (
     <div className="page editor" data-testid="editor">
@@ -91,6 +115,9 @@ export default function Editor({ plan }: { plan: Plan }) {
           </Link>
           <Link to={`/plan/${plan.id}/bom`} className="tab">
             物料清单
+          </Link>
+          <Link to={`/plan/${plan.id}/budget`} className="tab">
+            采购预算
           </Link>
         </nav>
       </div>
@@ -183,7 +210,16 @@ export default function Editor({ plan }: { plan: Plan }) {
                 value={plan.substrate.kind}
                 onChange={(e) => {
                   const s = SUBSTRATES.find((x) => x.kind === e.target.value)!;
-                  patchSub({ kind: s.kind, densityKgPerL: s.densityKgPerL });
+                  // 主材质改成与第二材质相同 → 第二材质换成原来的主材质，保持两种材质不同
+                  if (plan.substrate2 && s.kind === plan.substrate2.kind) {
+                    const old = SUBSTRATES.find((x) => x.kind === plan.substrate.kind)!;
+                    updatePlan(plan.id, {
+                      substrate: { ...plan.substrate, kind: s.kind, densityKgPerL: s.densityKgPerL },
+                      substrate2: { ...plan.substrate2, kind: old.kind, densityKgPerL: old.densityKgPerL },
+                    });
+                  } else {
+                    patchSub({ kind: s.kind, densityKgPerL: s.densityKgPerL });
+                  }
                 }}
               >
                 {SUBSTRATES.map((s) => (
@@ -212,7 +248,59 @@ export default function Editor({ plan }: { plan: Plan }) {
               onChange={(v) => patchSub({ slopeMm: v })}
               testid="sub-slope"
             />
+            <label className="chk span2">
+              <input
+                type="checkbox"
+                data-testid="sub-mix"
+                checked={!!plan.substrate2}
+                onChange={(e) => toggleMixSubstrate(e.target.checked)}
+              />
+              混用两种底砂（按体积分摊底砂层，预算分两行）
+            </label>
           </div>
+
+          {plan.substrate2 && (
+            <div className="grid2" data-testid="sub2-panel">
+              <label>
+                第二材质
+                <select
+                  data-testid="sub2-kind"
+                  value={plan.substrate2.kind}
+                  onChange={(e) => {
+                    const s = SUBSTRATES.find((x) => x.kind === e.target.value)!;
+                    patchSub2({ kind: s.kind, densityKgPerL: s.densityKgPerL });
+                  }}
+                >
+                  {SUBSTRATES.map((s) => (
+                    <option key={s.kind} value={s.kind} disabled={s.kind === plan.substrate.kind}>
+                      {s.label}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <NumField
+                label="密度 kg/L"
+                value={plan.substrate2.densityKgPerL}
+                onChange={(v) => patchSub2({ densityKgPerL: v })}
+                testid="sub2-density"
+                step={0.05}
+              />
+              <label className="span2">
+                第二材质占底砂层比例 %（余下为主材质）
+                <input
+                  type="number"
+                  data-testid="sub2-ratio"
+                  min={1}
+                  max={99}
+                  value={Math.round(((plan.budget?.sub2Ratio ?? 0.3) as number) * 100)}
+                  onChange={(e) => {
+                    const v = Number(e.target.value);
+                    if (!Number.isNaN(v)) setSub2Ratio(Math.max(0, Math.min(100, v)));
+                  }}
+                />
+              </label>
+            </div>
+          )}
 
           <h3>选中素材</h3>
           {!selected ? (

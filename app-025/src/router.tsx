@@ -7,6 +7,7 @@ import { useEffect, useState, type ReactNode } from 'react';
  * #/plan/:id/water  水质与设备
  * #/plan/:id/stocking 生物兼容
  * #/plan/:id/bom    物料清单
+ * #/plan/:id/budget 采购预算
  * #/library         素材库
  */
 
@@ -16,6 +17,7 @@ export type Route =
   | { name: 'water'; id: string }
   | { name: 'stocking'; id: string }
   | { name: 'bom'; id: string }
+  | { name: 'budget'; id: string }
   | { name: 'library' };
 
 export function parseHash(hash: string): Route {
@@ -26,6 +28,7 @@ export function parseHash(hash: string): Route {
     if (seg[2] === 'water') return { name: 'water', id };
     if (seg[2] === 'stocking') return { name: 'stocking', id };
     if (seg[2] === 'bom') return { name: 'bom', id };
+    if (seg[2] === 'budget') return { name: 'budget', id };
     return { name: 'editor', id };
   }
   if (seg[0] === 'library') return { name: 'library' };

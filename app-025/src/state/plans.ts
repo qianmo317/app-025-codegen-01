@@ -1,4 +1,4 @@
-import type { Plan, Tank, Substrate, WaterConfig } from '../core/types';
+import type { Plan, Tank, Substrate, WaterConfig, BudgetConfig, BudgetEntryConfig } from '../core/types';
 import { EMPTY_WATER } from '../core/types';
 
 const KEY = 'aquaplans.v1';
@@ -91,4 +91,22 @@ export function updateWater(id: string, patch: Partial<WaterConfig>) {
   const plan = getPlan(id);
   if (!plan) return;
   updatePlan(id, { water: { ...plan.water, ...patch } });
+}
+
+/** 更新采购预算配置（包装容量/单价按 key 存） */
+export function updateBudget(id: string, patch: Partial<BudgetConfig>) {
+  const plan = getPlan(id);
+  if (!plan) return;
+  updatePlan(id, {
+    budget: { entries: {}, ...plan.budget, ...patch },
+  });
+}
+
+/** 更新某一采购行的市售包装容量或整包单价；packPrice 传 undefined 表示清空（待报价） */
+export function updateBudgetEntry(id: string, key: string, patch: Partial<BudgetEntryConfig>) {
+  const plan = getPlan(id);
+  if (!plan) return;
+  const budget: BudgetConfig = plan.budget ?? { entries: {} };
+  const entries = { ...budget.entries, [key]: { ...budget.entries[key], ...patch } };
+  updatePlan(id, { budget: { ...budget, entries } });
 }
