@@ -1,5 +1,6 @@
-import type { Plan, Tank, Substrate, WaterConfig } from '../core/types';
+import type { Plan, Tank, Substrate, SubstrateLayer, WaterConfig, Packaging } from '../core/types';
 import { EMPTY_WATER } from '../core/types';
+import { withPackaging, withSaltKey } from '../core/budget';
 
 const KEY = 'aquaplans.v1';
 
@@ -91,4 +92,48 @@ export function updateWater(id: string, patch: Partial<WaterConfig>) {
   const plan = getPlan(id);
   if (!plan) return;
   updatePlan(id, { water: { ...plan.water, ...patch } });
+}
+
+/** 更新某行（底砂材质/水草/盐/鱼）的市售包装容量或单价；未建 costs 时惰性创建 */
+export function updatePackaging(id: string, key: string, patch: Partial<Packaging>) {
+  const plan = getPlan(id);
+  if (!plan) return;
+  updatePlan(id, { costs: withPackaging(plan.costs, key, patch) });
+}
+
+/** 切换矿物盐种类（用量与单价都随盐变，需重算） */
+export function updateSaltKey(id: string, saltKey: string) {
+  const plan = getPlan(id);
+  if (!plan) return;
+  updatePlan(id, { costs: withSaltKey(plan.costs, saltKey) });
+}
+
+/** 开启/关闭两种底砂混用：开启时从当前单材质复制出两层；关闭时保留首层 */
+export function setSubstrateMixed(id: string, mixed: boolean) {
+  const plan = getPlan(id);
+  if (!plan) return;
+  if (mixed) {
+    const first: SubstrateLayer = { ...plan.substrate };
+    const second: SubstrateLayer =
+      plan.substrateLayers && plan.substrateLayers[1]
+        ? { ...plan.substrateLayers[1] }
+        : { kind: 'sand', densityKgPerL: 1.6, thicknessMm: 30, slopeMm: 0 };
+    updatePlan(id, { substrate: first, substrateLayers: [first, second] });
+  } else {
+    const first = plan.substrateLayers?.[0] ?? plan.substrate;
+    updatePlan(id, { substrate: { ...first }, substrateLayers: undefined });
+  }
+}
+
+/** 更新某层底砂（混用时）；单层方案回写到 substrate */
+export function updateSubstrateLayer(id: string, index: number, patch: Partial<SubstrateLayer>) {
+  const plan = getPlan(id);
+  if (!plan) return;
+  const layers = plan.substrateLayers && plan.substrateLayers.length > 0 ? plan.substrateLayers : [plan.substrate];
+  const next = layers.map((l, i) => (i === index ? { ...l, ...patch } : l));
+  if (plan.substrateLayers && plan.substrateLayers.length > 0) {
+    updatePlan(id, { substrate: next[0], substrateLayers: next });
+  } else {
+    updatePlan(id, { substrate: next[0] });
+  }
 }

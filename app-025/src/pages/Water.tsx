@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react';
 import type { Plan } from '../core/types';
 import { updateWater } from '../state/plans';
 import { Link } from '../router';
-import { effectiveVolumeL } from '../core/volume';
+import { planEffectiveVolumeL } from '../core/volume';
 import {
   roMixForGh,
   saltForGh,
@@ -24,7 +24,7 @@ import { LIGHT_LUMEN_PER_M2 } from '../core/equipment';
 
 export default function Water({ plan }: { plan: Plan }) {
   const w = plan.water;
-  const eff = effectiveVolumeL(plan.tank, plan.substrate, plan.items);
+  const eff = planEffectiveVolumeL(plan);
   const plantQty = plan.items.filter((i) => i.kind === 'plant').reduce((s, i) => s + (i.qty ?? 1), 0);
 
   const [actualLumens, setActualLumens] = useState<number>(() => recommendLumens('mid', (plan.tank.l * plan.tank.w) / 10000));

@@ -16,7 +16,7 @@
 │  #/ /plan/:id[/water|/stocking|/bom] /library
 ├─────────────────────────────────────────────────────────────┤
 │  核心计算层 core/（纯函数，"后端"逻辑，全部可单测）
-│  volume.ts · water.ts · equipment.ts · compatibility.ts · bom.ts · types.ts
+│  volume.ts · water.ts · equipment.ts · compatibility.ts · bom.ts · budget.ts · types.ts
 ├─────────────────────────────────────────────────────────────┤
 │  状态层 state/plans.ts（集中式 store，观察者模式）
 │  方案 CRUD + localStorage 持久化（键 aquaplans.v1）
@@ -88,7 +88,8 @@ App.tsx: useSyncExternalStore(subscribePlans, getPlans) ──▶ 触发重渲�
 | water.ts | `weeklyWaterChangePct` `roMixForGh` `saltForGh` `co2FromPhKh` `targetPhForCo2` `co2BubblesPerSec` `phKhCo2Table` `co2Lookup` | RO 兑水与矿物盐互斥输出；CO₂ ≈ 3×KH×10^(7−pH)；泡/秒估算强制 `estimated` 标注 |
 | equipment.ts | `classifyLightByLumen` `recommendLumens` `recommendWatts` `checkLight` `filterFlowLph` `heaterWatts` `suggestGlassMm` `equipmentSummary` | 光照三档判定 + 水草需求交叉校验；过滤 5~8 倍；加热 W = L×ΔT×0.12 |
 | compatibility.ts | `rangesOverlap` `checkPair` `checkSchooling` `checkTankSize` `checkDensity` `checkStocking` | 逐对 5 条规则 + 附加规则，输出 `StockingIssue[]`（severity/conflict·warning·info + code + message） |
-| bom.ts | `buildBom` | 汇总底砂/水草/硬景观/生物/设备行 + 养护参数卡 |
+| bom.ts | `buildBom` | 汇总底砂/水草/硬景观/生物/设备行 + 养护参数卡（底砂按分层分别计重，同种材质合并） |
+| budget.ts | `buildBudget` `ceilPacks` `withPackaging` `withSaltKey` | 采购预算：底砂按袋/水草按盆/矿物盐按包/鱼按群，件数=ceil(用量/每包容量)向上取整；输出余量与折合单价；缺价只标「待报价」不计零；类别小计与总计；矿物盐随方案（有效水量、ΔGH、盐种类）重算 |
 
 可配参数集中以常量或数据表存在（`GH_SALTS`、`LIGHT_LUMEN_PER_M2`、`WL_RANGE`、底砂密度表、硬景观排水系数），便于调参与测试边界。
 
@@ -97,7 +98,8 @@ App.tsx: useSyncExternalStore(subscribePlans, getPlans) ──▶ 触发重渲�
 见 [README.md §10](../README.md)。要点：
 
 - `Tank` 尺寸单位 cm，水面/底砂厚度/坡度单位 mm（输入习惯对齐实际）；
-- `Item` 同时承载硬景观（scaleCm/displacement/shape）与水草（layer/lightNeed/growth/qty）；
+- `Item` 同时承载硬景观（scaleCm/displacement/shape）与水草（layer/lightNeed/growth/qty）；水草条目额外带 `plantId`，采购预算据此把同一素材的多组株数合并到一盆包装。
+- `Plan.substrateLayers?` 为可选底砂分层：为空表示单材质（退化为 `substrate`），长度 ≥2 表示两种底砂混用（每层各自厚度/坡度/密度，体积重量分别计算后相加）；`Plan.costs?` 存使用者填写的市售包装容量与单价（按 `sub:<kind>` / `plant:<id>` / `salt:<盐名>` / `fish:<id>` 为 key），未填单价绝不按 0 元参与合计。
 - `Fish.tempRange/ghRange/phRange` 为二元组区间，兼容性检查依赖区间交集运算 `rangesOverlap`。
 
 ## 7. 测试架构映射

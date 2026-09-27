@@ -1,15 +1,16 @@
 import { useMemo, useState } from 'react';
-import type { Plan, Item } from '../core/types';
+import type { Plan, Item, SubstrateLayer } from '../core/types';
 import Canvas, { occlusionWarnings } from '../components/Canvas';
-import { updatePlan } from '../state/plans';
+import { updatePlan, setSubstrateMixed, updateSubstrateLayer } from '../state/plans';
 import { PLANTS, HARDSCAPES, SUBSTRATES } from '../data/db';
 import { Link } from '../router';
 import {
   grossVolumeL,
-  substrateVolumeL,
-  substrateWeightKg,
+  substrateLayerWeightKg,
   hardscapeDisplacementL,
-  effectiveVolumeL,
+  planSubstrateLayers,
+  planSubstrateVolumeL,
+  planEffectiveVolumeL,
 } from '../core/volume';
 
 export default function Editor({ plan }: { plan: Plan }) {
@@ -18,10 +19,10 @@ export default function Editor({ plan }: { plan: Plan }) {
 
   const vol = useMemo(() => {
     const gross = grossVolumeL(plan.tank);
-    const subVol = substrateVolumeL(plan.tank, plan.substrate);
-    const subKg = substrateWeightKg(plan.tank, plan.substrate);
+    const subVol = planSubstrateVolumeL(plan);
+    const subKg = planSubstrateLayers(plan).reduce((s, l) => s + substrateLayerWeightKg(plan.tank, l), 0);
     const displace = hardscapeDisplacementL(plan.items);
-    const eff = effectiveVolumeL(plan.tank, plan.substrate, plan.items);
+    const eff = planEffectiveVolumeL(plan);
     return { gross, subVol, subKg, displace, eff };
   }, [plan]);
 
@@ -31,6 +32,7 @@ export default function Editor({ plan }: { plan: Plan }) {
     const item: Item = {
       id: `i${Date.now()}${Math.floor(Math.random() * 1e3)}`,
       kind: 'plant',
+      plantId,
       name,
       x: 10 + Math.random() * 20,
       y: 10 + Math.random() * 10,
@@ -73,8 +75,10 @@ export default function Editor({ plan }: { plan: Plan }) {
   function patchTank(patch: Partial<Plan['tank']>) {
     updatePlan(plan.id, { tank: { ...plan.tank, ...patch } });
   }
-  function patchSub(patch: Partial<Plan['substrate']>) {
-    updatePlan(plan.id, { substrate: { ...plan.substrate, ...patch } });
+  const mixed = !!(plan.substrateLayers && plan.substrateLayers.length > 1);
+  const subLayers = planSubstrateLayers(plan);
+  function patchLayer(index: number, patch: Partial<SubstrateLayer>) {
+    updateSubstrateLayer(plan.id, index, patch);
   }
 
   return (
@@ -175,44 +179,58 @@ export default function Editor({ plan }: { plan: Plan }) {
           </div>
 
           <h3>底砂</h3>
-          <div className="grid2">
-            <label>
-              类型
-              <select
-                data-testid="sub-kind"
-                value={plan.substrate.kind}
-                onChange={(e) => {
-                  const s = SUBSTRATES.find((x) => x.kind === e.target.value)!;
-                  patchSub({ kind: s.kind, densityKgPerL: s.densityKgPerL });
-                }}
-              >
-                {SUBSTRATES.map((s) => (
-                  <option key={s.kind} value={s.kind}>
-                    {s.label}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <NumField
-              label="密度 kg/L"
-              value={plan.substrate.densityKgPerL}
-              onChange={(v) => patchSub({ densityKgPerL: v })}
-              testid="sub-density"
-              step={0.05}
+          <label className="chk">
+            <input
+              type="checkbox"
+              data-testid="sub-mixed"
+              checked={mixed}
+              onChange={(e) => setSubstrateMixed(plan.id, e.target.checked)}
             />
-            <NumField
-              label="厚度 mm"
-              value={plan.substrate.thicknessMm}
-              onChange={(v) => patchSub({ thicknessMm: v })}
-              testid="sub-thickness"
-            />
-            <NumField
-              label="坡度 mm"
-              value={plan.substrate.slopeMm}
-              onChange={(v) => patchSub({ slopeMm: v })}
-              testid="sub-slope"
-            />
-          </div>
+            两种底砂混用（分两层，各自计量）
+          </label>
+          {subLayers.map((sub, idx) => (
+            <div className="sublayer" key={idx} data-testid={`sub-layer-${idx}`}>
+              <b className="small">{mixed ? `第 ${idx + 1} 层` : ''}</b>
+              <div className="grid2">
+                <label>
+                  类型
+                  <select
+                    data-testid={mixed ? `sub-kind-${idx}` : 'sub-kind'}
+                    value={sub.kind}
+                    onChange={(e) => {
+                      const s = SUBSTRATES.find((x) => x.kind === e.target.value)!;
+                      patchLayer(idx, { kind: s.kind, densityKgPerL: s.densityKgPerL });
+                    }}
+                  >
+                    {SUBSTRATES.map((s) => (
+                      <option key={s.kind} value={s.kind}>
+                        {s.label}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <NumField
+                  label="密度 kg/L"
+                  value={sub.densityKgPerL}
+                  onChange={(v) => patchLayer(idx, { densityKgPerL: v })}
+                  testid={mixed ? `sub-density-${idx}` : 'sub-density'}
+                  step={0.05}
+                />
+                <NumField
+                  label="厚度 mm"
+                  value={sub.thicknessMm}
+                  onChange={(v) => patchLayer(idx, { thicknessMm: v })}
+                  testid={mixed ? `sub-thickness-${idx}` : 'sub-thickness'}
+                />
+                <NumField
+                  label="坡度 mm"
+                  value={sub.slopeMm}
+                  onChange={(v) => patchLayer(idx, { slopeMm: v })}
+                  testid={mixed ? `sub-slope-${idx}` : 'sub-slope'}
+                />
+              </div>
+            </div>
+          ))}
 
           <h3>选中素材</h3>
           {!selected ? (

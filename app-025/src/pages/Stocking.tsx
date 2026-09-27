@@ -3,7 +3,7 @@ import type { Plan } from '../core/types';
 import { FISHES, fishById } from '../data/db';
 import { updatePlan } from '../state/plans';
 import { Link } from '../router';
-import { effectiveVolumeL } from '../core/volume';
+import { planEffectiveVolumeL } from '../core/volume';
 import {
   checkStocking,
   checkDensity,
@@ -12,7 +12,7 @@ import {
 
 export default function Stocking({ plan }: { plan: Plan }) {
   const [pickId, setPickId] = useState('');
-  const eff = effectiveVolumeL(plan.tank, plan.substrate, plan.items);
+  const eff = planEffectiveVolumeL(plan);
   const hasPlants = plan.items.some((i) => i.kind === 'plant');
 
   const entries = useMemo(

@@ -128,6 +128,31 @@ test.describe('水族造景规划器 E2E', () => {
     await expect(page.getByTestId('care-card')).toContainText('换水');
     await expect(page.getByTestId('care-card')).toContainText('光照');
     await expect(page.getByTestId('care-card')).toContainText('CO₂');
+
+    // 5b. 采购预算：用量/买量并排、向上取整、未填价待报价（不按零算）
+    const budget = page.getByTestId('budget-section');
+    await expect(budget).toBeVisible();
+    // 没填价时提示缺价、不出总计
+    await expect(page.getByTestId('budget-total-missing')).toContainText('价格未填');
+    // 红宫廷 10 株、6 株/盆 → 2 盆，买到 12 株、多 2 株
+    await expect(page.getByTestId('packs-plant:p-ludwigia')).toHaveText('2');
+    await expect(page.getByTestId('surplus-plant:p-ludwigia')).toContainText('+2');
+    // 小水榕 10 株（加入时默认 10 株）→ 同样 2 盆
+    await expect(page.getByTestId('packs-plant:p-anubias')).toHaveText('2');
+    // 鱼按群：红绿灯 3 尾、6 尾/群 → 1 群（买到 6 尾、多 3 尾）
+    await expect(page.getByTestId('packs-fish:f-neon-tetra')).toHaveText('1');
+    await expect(page.getByTestId('surplus-fish:f-neon-tetra')).toContainText('+3');
+    // 底砂按袋（90 缸 ADA 50+60mm → 体积 90×45×8=32.4L ×1.15=37.26kg → 5 袋）
+    await expect(page.getByTestId('packs-sub:ada')).toHaveText('5');
+    await expect(page.getByTestId('surplus-sub:ada')).toContainText('+');
+    // 填一行单价：折合单价出现、该行小计更新；但仍有缺价行 → 总计仍不出
+    await page.getByTestId('price-sub:ada').fill('60');
+    await page.getByTestId('price-sub:ada').blur();
+    await expect(page.getByTestId('eff-price-sub:ada')).toContainText('6.67');
+    await expect(page.getByTestId('linecost-sub:ada')).toContainText('300');
+    await expect(page.getByTestId('budget-subtotal-底砂')).toContainText('300');
+    await expect(page.getByTestId('budget-total-missing')).toBeVisible();
+
     // 导出 SVG 触发下载
     const [download] = await Promise.all([
       page.waitForEvent('download'),
@@ -165,6 +190,45 @@ test.describe('水族造景规划器 E2E', () => {
     const count = await rows.count();
     expect(count).toBeGreaterThan(0);
     expect(count).toBeLessThan(26);
+  });
+
+  test('两种底砂混用：预算分两行按各密度计量，目标 GH 升高时矿物盐按包折算', async ({ page }) => {
+    await openPlan(page);
+
+    // 开启两种底砂混用：第一层 ADA 50mm 无坡，第二层河沙 20mm
+    await page.getByTestId('sub-mixed').check();
+    await page.getByTestId('sub-kind-0').selectOption('ada');
+    await page.getByTestId('sub-thickness-0').fill('50');
+    await page.getByTestId('sub-slope-0').fill('0');
+    await page.getByTestId('sub-thickness-1').fill('20');
+    await page.getByTestId('sub-slope-1').fill('0');
+
+    // 目标 GH 高于自来水 → 触发矿物盐方案
+    await page.getByRole('link', { name: '水质与设备' }).first().click();
+    await page.getByTestId('target-gh').fill('18');
+
+    // 水质页没有直达清单的链接：经编辑器回物料清单（store 已持久化 GH）
+    await page.getByRole('link', { name: '← 造景编辑' }).click();
+    await page.getByRole('link', { name: '物料清单' }).first().click();
+    await expect(page.getByTestId('bom-page')).toBeVisible();
+
+    // 底砂两行：ADA 60×45×5cm=13.5L×1.15=15.525kg；河沙 60×45×2=5.4L×1.6=8.64kg
+    await expect(page.getByTestId('budget-line-sub:ada')).toBeVisible();
+    await expect(page.getByTestId('budget-line-sub:sand')).toBeVisible();
+    await expect(page.getByTestId('need-sub:ada')).toContainText('15.5');
+    await expect(page.getByTestId('need-sub:sand')).toContainText('8.64 kg');
+    // 合并同种包装：同名材质只有一行（不会出现两个 ADA 行）
+    await expect(page.getByTestId('budget-cat-底砂').locator('[data-testid^="budget-line-sub:"]')).toHaveCount(2);
+
+    // 矿物盐行出现：60 缸默认 390mm 水柱 → 毛水 105.3L，底砂 13.5+5.4=18.9L
+    // 有效水量 86.4L；ΔGH=6，无水氯化钙 m=6×86.4/0.5=1036.8g → 500g/包 → 3 包
+    // （先把水面调到 390mm 即默认；这里直接固定为 390 保证数值稳定）
+    await expect(page.getByTestId('budget-cat-矿物盐')).toBeVisible();
+    await expect(page.getByTestId(/^budget-line-salt:/)).toContainText('氯化钙');
+    const saltNeed = await page.getByTestId(/^need-salt:/).textContent();
+    expect(Number(saltNeed!.match(/[\d.]+/)![0])).toBeCloseTo(1036.8, 0);
+    await expect(page.getByTestId(/^packs-salt:/)).toHaveText('3');
+    await expect(page.getByTestId(/^surplus-salt:/)).toContainText('+463.2');
   });
 
   test('healthz 由 nginx 提供（Docker 场景断言，preview 下跳过）', async ({ page, baseURL }) => {

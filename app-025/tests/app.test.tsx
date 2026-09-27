@@ -255,6 +255,133 @@ describe('物料清单页', () => {
     URL.createObjectURL = origCreate;
     URL.revokeObjectURL = origRevoke;
   });
+
+  it('采购预算：用量与买量并排、向上取整；未填价标「待报价」且不出总计，填价后出总计', async () => {
+    const plan = newPlan('预算测试');
+    upsertPlan({
+      ...plan,
+      items: [
+        { id: 'i1', kind: 'plant', plantId: 'p-ludwigia', name: '红宫廷', x: 10, y: 10, scaleCm: 25, rotDeg: 0, layer: 'back', lightNeed: 'high', growth: 'fast', qty: 20 },
+      ],
+      fishes: [{ fishId: 'f-cardinal-tetra', count: 10 }],
+    });
+    window.location.hash = `/plan/${plan.id}/bom`;
+    render(<App />);
+    await screen.findByTestId('budget-section');
+
+    // 底砂行：默认 60×45、50+30mm、密度 1.05 → 22.68kg，9kg/袋 → 3 袋、买到 27kg
+    const subRow = screen.getByTestId('budget-line-sub:soil');
+    expect(subRow.textContent).toContain('22.68 kg');
+    expect(screen.getByTestId('packs-sub:soil').textContent).toBe('3');
+    expect(screen.getByTestId('bought-sub:soil').textContent).toContain('27 kg');
+    expect(screen.getByTestId('surplus-sub:soil').textContent).toContain('+4.32 kg');
+
+    // 水草 20 株、6 株/盆 → 4 盆；鱼 10 尾、6 尾/群 → 2 群
+    expect(screen.getByTestId('packs-plant:p-ludwigia').textContent).toBe('4');
+    expect(screen.getByTestId('packs-fish:f-cardinal-tetra').textContent).toBe('2');
+
+    // 初始全部未报价 → 总计提示缺价（不按零算）
+    expect(screen.getByTestId('budget-total-missing')).toBeInTheDocument();
+    expect(screen.getByTestId('price-missing-sub:soil')).toBeInTheDocument();
+    // 各类小计同样提示待报价
+    expect(screen.getByTestId('budget-subtotal-底砂').textContent).toContain('待报价');
+
+    // 给底砂与水草填价（鱼仍缺价）
+    const subPrice = screen.getByTestId('price-sub:soil') as HTMLInputElement;
+    await userEvent.clear(subPrice);
+    await userEvent.type(subPrice, '45');
+    await userEvent.tab();
+    const plantPrice = screen.getByTestId('price-plant:p-ludwigia') as HTMLInputElement;
+    await userEvent.clear(plantPrice);
+    await userEvent.type(plantPrice, '12');
+    await userEvent.tab();
+
+    // 仍有缺价：总计不出，但已填项合计 = 3×45 + 4×12
+    expect(screen.getByTestId('budget-total-missing')).toBeInTheDocument();
+    expect(screen.getByTestId('budget-priced-sum').textContent).toContain('183');
+    // 底砂小计已出，折合单价 45/9 = 5
+    expect(screen.getByTestId('budget-subtotal-底砂').textContent).toContain('135');
+    expect(screen.getByTestId('eff-price-sub:soil').textContent).toContain('5');
+
+    // 补齐鱼价 → 总计 = 135 + 48 + 2×10
+    const fishPrice = screen.getByTestId('price-fish:f-cardinal-tetra') as HTMLInputElement;
+    await userEvent.clear(fishPrice);
+    await userEvent.type(fishPrice, '10');
+    await userEvent.tab();
+    expect(screen.getByTestId('budget-total').textContent).toContain('203');
+    expect(screen.queryByTestId('budget-total-missing')).toBeNull();
+  });
+
+  it('采购预算：改每包容量后件数实时重算（水草 6 株/盆 → 10 株/盆：4 盆变 2 盆）', async () => {
+    const plan = newPlan('包装测试');
+    upsertPlan({
+      ...plan,
+      items: [
+        { id: 'i1', kind: 'plant', plantId: 'p-ludwigia', name: '红宫廷', x: 10, y: 10, scaleCm: 25, rotDeg: 0, layer: 'back', lightNeed: 'high', growth: 'fast', qty: 20 },
+      ],
+    });
+    window.location.hash = `/plan/${plan.id}/bom`;
+    render(<App />);
+    await screen.findByTestId('budget-section');
+    expect(screen.getByTestId('packs-plant:p-ludwigia').textContent).toBe('4');
+    const packSize = screen.getByTestId('packsize-plant:p-ludwigia') as HTMLInputElement;
+    fireEvent.change(packSize, { target: { value: '10' } });
+    expect(screen.getByTestId('packs-plant:p-ludwigia').textContent).toBe('2');
+    expect(screen.getByTestId('surplus-plant:p-ludwigia').textContent).toBe('—');
+  });
+
+  it('混用两种底砂：编辑器开两层并改材质/厚度，预算分两行且各按密度计；BOM 也出两行', async () => {
+    const plan = newPlan('混砂测试');
+    upsertPlan(plan);
+    window.location.hash = `/plan/${plan.id}`;
+    render(<App />);
+    await screen.findByTestId('editor');
+
+    await userEvent.click(screen.getByTestId('sub-mixed'));
+    // 第二层默认河沙，改成 20mm 厚；第一层 ADA 50mm
+    const kind1 = screen.getByTestId('sub-kind-0') as HTMLSelectElement;
+    await userEvent.selectOptions(kind1, 'ada');
+    const thick0 = screen.getByTestId('sub-thickness-0') as HTMLInputElement;
+    await userEvent.clear(thick0);
+    await userEvent.type(thick0, '50');
+    const slope0 = screen.getByTestId('sub-slope-0') as HTMLInputElement;
+    await userEvent.clear(slope0);
+    await userEvent.type(slope0, '0');
+    const thick1 = screen.getByTestId('sub-thickness-1') as HTMLInputElement;
+    await userEvent.clear(thick1);
+    await userEvent.type(thick1, '20');
+
+    // 到预算页：两种材质各一行
+    window.location.hash = `/plan/${plan.id}/bom`;
+    await screen.findByTestId('budget-section');
+    expect(screen.getByTestId('budget-line-sub:ada')).toBeInTheDocument();
+    expect(screen.getByTestId('budget-line-sub:sand')).toBeInTheDocument();
+    // ADA：60×45×5cm=13.5L×1.15=15.525kg（浮点约 15.52）；河沙：60×45×2cm=5.4L×1.6=8.64kg
+    expect(screen.getByTestId('need-sub:ada').textContent).toMatch(/15\.5[23]/);
+    expect(screen.getByTestId('need-sub:sand').textContent).toContain('8.64');
+    // BOM 物料明细底砂也是两行
+    const bomTable = screen.getByTestId('bom-table').textContent!;
+    expect(bomTable).toContain('ADA 泥');
+    expect(bomTable).toContain('河沙');
+  });
+
+  it('矿物盐：目标 GH 高于自来水时预算出盐行，切换盐种类用量重算', async () => {
+    const plan = newPlan('盐预算测试');
+    upsertPlan({ ...plan, water: { ...plan.water, targetGh: 18 } });
+    window.location.hash = `/plan/${plan.id}/bom`;
+    render(<App />);
+    await screen.findByTestId('budget-section');
+    const saltCat = screen.getByTestId('budget-cat-矿物盐');
+    expect(saltCat).toBeInTheDocument();
+    // 默认无水氯化钙
+    expect(screen.getByTestId(/^budget-line-salt:/)).toBeTruthy();
+    const gramsBefore = Number((screen.getByTestId(/^need-salt:/) as HTMLElement).textContent!.match(/[\d.]+/)![0]);
+    expect(gramsBefore).toBeGreaterThan(0);
+    // 切到泻盐（贡献更小 → 克数更大）
+    await userEvent.selectOptions(screen.getByTestId('salt-select'), '硫酸镁 MgSO₄·7H₂O(泻盐)');
+    const gramsAfter = Number((screen.getByTestId(/^need-salt:/) as HTMLElement).textContent!.match(/[\d.]+/)![0]);
+    expect(gramsAfter).toBeGreaterThan(gramsBefore);
+  });
 });
 
 describe('素材库页', () => {

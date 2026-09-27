@@ -1,6 +1,7 @@
 import { useMemo, useRef, useState, useEffect, type ReactElement } from 'react';
 import type { Item, Plan } from '../core/types';
 import { updatePlan } from '../state/plans';
+import { planSubstrateLayers, combinedSubstrate } from '../core/volume';
 
 /**
  * 缸体画布：平面图 / 侧视图 双视图 SVG。
@@ -180,8 +181,9 @@ export default function Canvas({ plan, selectedId, onSelect }: Props) {
           {/* 底砂（平面为整片色带；侧视画梯形坡） */}
           {view === 'side' ? (
             (() => {
-              const base = plan.substrate.thicknessMm / 10;
-              const slope = plan.substrate.slopeMm / 10;
+              const combined = combinedSubstrate(planSubstrateLayers(plan));
+              const base = combined.thicknessMm / 10;
+              const slope = combined.slopeMm / 10;
               const h0 = toPx(base);
               const h1 = toPx(base + slope);
               return (

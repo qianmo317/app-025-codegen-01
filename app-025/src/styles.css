@@ -360,6 +360,71 @@ label.chk {
   stroke: #d9e6ec;
   stroke-width: 1;
 }
+/* 底砂分层（混用） */
+.sublayer {
+  border: 1px dashed var(--line);
+  border-radius: 6px;
+  padding: 8px;
+  margin: 6px 0;
+}
+/* 采购预算 */
+.section-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 18px 0 6px;
+}
+.section-head h2 {
+  margin: 0;
+}
+.budget-totals {
+  font-size: 14px;
+}
+.big-inline {
+  font-size: 18px;
+}
+.salt-pick {
+  margin: 8px 0;
+}
+.budget-cat {
+  margin: 12px 0 18px;
+}
+.budget-cat-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+.budget-cat-head h3 {
+  margin: 8px 0;
+}
+.budget-table {
+  font-size: 12.5px;
+}
+.budget-table .num-input {
+  width: 64px;
+  padding: 3px 6px;
+}
+.budget-table .price-input {
+  width: 84px;
+}
+.budget-table .surplus {
+  color: #b7791f;
+  white-space: nowrap;
+}
+.row-missing-price {
+  background: #fffaf0;
+}
+.price-tag {
+  display: inline-block;
+  margin-left: 6px;
+  padding: 0 6px;
+  border-radius: 8px;
+  background: #fbe4c2;
+  color: #9a5b00;
+  font-size: 11px;
+}
 /* 打印 */
 @media print {
   .no-print,

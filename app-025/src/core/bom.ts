@@ -1,5 +1,5 @@
-import type { Fish, Plan } from './types';
-import { substrateWeightKg, effectiveVolumeL } from './volume';
+import type { Fish, Plan, SubstrateKind } from './types';
+import { planEffectiveVolumeL, planSubstrateLayers, substrateLayerWeightKg } from './volume';
 import { weeklyWaterChangePct } from './water';
 import { equipmentSummary } from './equipment';
 
@@ -22,17 +22,28 @@ export function buildBom(
   plantById: Map<string, { name: string; lightNeed?: string }>,
 ): Bom {
   const { tank, substrate, items, water } = plan;
-  const eff = effectiveVolumeL(tank, substrate, items);
-  const substrateKg = substrateWeightKg(tank, substrate);
+  const layers = planSubstrateLayers(plan);
+  const eff = planEffectiveVolumeL(plan);
   const lines: BomLine[] = [];
 
-  // 底砂
-  lines.push({
-    category: '底砂',
-    name: substrate.kind === 'ada' ? 'ADA 泥' : substrate.kind === 'soil' ? '水草泥' : substrate.kind === 'sand' ? '河沙' : '砾石',
-    spec: `密度 ${substrate.densityKgPerL}kg/L，厚度 ${substrate.thicknessMm}mm，坡度 ${substrate.slopeMm}mm`,
-    qty: `${substrateKg.toFixed(1)} kg`,
-  });
+  // 底砂（混用分层时每种材质一行；同种材质合并重量）
+  const subGroups = new Map<SubstrateKind, { kg: number; thicknessMm: number; slopeMm: number; density: number }>();
+  for (const layer of layers) {
+    const g = subGroups.get(layer.kind) ?? { kg: 0, thicknessMm: 0, slopeMm: 0, density: layer.densityKgPerL };
+    g.kg += substrateLayerWeightKg(tank, layer);
+    g.thicknessMm += layer.thicknessMm;
+    g.slopeMm = Math.max(g.slopeMm, layer.slopeMm);
+    subGroups.set(layer.kind, g);
+  }
+  for (const [kind, g] of subGroups) {
+    const name = kind === 'ada' ? 'ADA 泥' : kind === 'soil' ? '水草泥' : kind === 'sand' ? '河沙' : '砾石';
+    lines.push({
+      category: '底砂',
+      name,
+      spec: `密度 ${g.density}kg/L，厚度 ${g.thicknessMm}mm，坡度 ${g.slopeMm}mm`,
+      qty: `${g.kg.toFixed(1)} kg`,
+    });
+  }
 
   // 水草
   const plants = items.filter((i) => i.kind === 'plant');
@@ -69,7 +80,7 @@ export function buildBom(
   }
 
   // 设备
-  const eq = equipmentSummary(tank, substrate, items, 'mid', water.roomTempC, water.targetTempC);
+  const eq = equipmentSummary(tank, substrate, items, 'mid', water.roomTempC, water.targetTempC, layers);
   lines.push({
     category: '设备',
     name: '过滤器',

@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Link, navigate } from '../router';
 import { upsertPlan, deletePlan, renamePlan, newPlan, getPlans } from '../state/plans';
-import { substrateWeightKg, grossVolumeL } from '../core/volume';
+import { planSubstrateLayers, substrateLayerWeightKg, grossVolumeL } from '../core/volume';
 
 export default function PlanList() {
   const plans = getPlans();
@@ -49,7 +49,7 @@ export default function PlanList() {
                 </span>
               </div>
               <div className="muted small">
-                底砂 {substrateWeightKg(p.tank, p.substrate).toFixed(1)}kg · 素材 {p.items.length} 件 · 鱼{' '}
+                底砂 {planSubstrateLayers(p).reduce((s, l) => s + substrateLayerWeightKg(p.tank, l), 0).toFixed(1)}kg · 素材 {p.items.length} 件 · 鱼{' '}
                 {p.fishes.reduce((s, f) => s + f.count, 0)} 尾 · 更新 {new Date(p.updatedAt).toLocaleString('zh-CN')}
               </div>
               <div className="row">

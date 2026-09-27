@@ -1,6 +1,6 @@
 import type { Item, Tank } from './types';
-import { effectiveVolumeL, waterSurfaceAreaM2 } from './volume';
-import type { Substrate } from './types';
+import type { Substrate, SubstrateLayer } from './types';
+import { waterSurfaceAreaM2, substrateVolumeL, grossVolumeL, hardscapeDisplacementL } from './volume';
 
 /** 光照等级：按 流明 / 水面面积(m²) 判定（经验阈值，可配） */
 export type LightLevel = 'low' | 'mid' | 'high';
@@ -101,8 +101,12 @@ export type EquipmentSummary = {
   heater: { watts: number; suggested: number };
 };
 
-export function equipmentSummary(tank: Tank, sub: Substrate, items: Item[], targetLevel: LightLevel, roomTempC: number, targetTempC: number): EquipmentSummary {
-  const eff = effectiveVolumeL(tank, sub, items);
+export function equipmentSummary(tank: Tank, sub: Substrate, items: Item[], targetLevel: LightLevel, roomTempC: number, targetTempC: number, layers?: SubstrateLayer[]): EquipmentSummary {
+  // 混用底砂时按所有分层体积之和扣除；未传或单层时退化为既有行为
+  const subVolume = layers && layers.length > 0
+    ? layers.reduce((s, l) => s + substrateVolumeL(tank, l), 0)
+    : substrateVolumeL(tank, sub);
+  const eff = Math.max(0, grossVolumeL(tank) - subVolume - hardscapeDisplacementL(items));
   const area = waterSurfaceAreaM2(tank);
   const flow = filterFlowLph(eff);
   return {

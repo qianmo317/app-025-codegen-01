@@ -36,6 +36,7 @@
 | 水量水质 | 有效水量→每周换水建议；GH/KH 调配（RO 兑水 + 矿物盐双方案）；CO₂ 需求（泡/秒，标注经验估算）；pH-KH-CO₂ 关系表 |
 | 设备匹配 | 照明（流明/面积判定低中高光 + 水草需求交叉校验爆藻风险）、过滤（5~8 倍流量）、加热棒（按温差估算） |
 | 兼容性检查 | 逐对检查混养冲突（攻击性、体长差 3 倍、水温/GH/pH 无交集、啃草、群游不足），输出原因；密度校验（1cm/1~2L 经验值，不阻断） |
+| 采购预算 | 底砂按袋、水草按盆、矿物盐按包、鱼按群折算采购件数（**实际用量向上取整到整包**，单列多买的余量与折合单价）；单价由使用者填写，**未填项标「待报价」而不是按 0 元**；给出总计与各类别小计；用量随方案（底砂材质/厚度、水草株数、鱼尾数、水质 GH）改动自动重算；**两种底砂混用时分两行、同种材质合并** |
 | 导出 | 造景平面图 SVG 下载（含尺寸标注）、物料清单（底砂 kg/水草株数/鱼数/设备参数）、养护参数卡（A4 打印） |
 
 ### 3.2 进阶功能
@@ -81,7 +82,8 @@ app-025/
 │   ├── equipment.test.ts         # 设备 10 用例
 │   ├── compatibility.test.ts     # 兼容性/密度 24 用例
 │   ├── bom.test.ts               # 物料清单 5 用例
-│   └── app.test.tsx              # 组件交互 16 用例（RTL）
+│   ├── budget.test.ts            # 采购预算 20 用例（取整/余量/缺价/重算/混砂/盐）
+│   └── app.test.tsx              # 组件交互 20 用例（RTL）
 └── src/
     ├── main.tsx / App.tsx / router.tsx / styles.css
     ├── core/                     # 纯计算层（"后端"逻辑，全部可单测）
@@ -90,7 +92,8 @@ app-025/
     │   ├── water.ts              # 换水/GH-KH/CO₂
     │   ├── equipment.ts          # 照明/过滤/加热
     │   ├── compatibility.ts      # 混养兼容与密度
-    │   └── bom.ts                # 物料清单与养护卡
+    │   ├── bom.ts                # 物料清单与养护卡
+    │   └── budget.ts             # 采购预算（包装折算/余量/折合单价/小计总计）
     ├── data/
     │   ├── db.ts                 # 类型化数据出口
     │   ├── plants.json           # 水草 12 种（层次/光照/生长速度/CO₂）
@@ -145,7 +148,23 @@ app-025/
 5. 群游鱼 < minSchool 尾（默认 6）→ 建议补足（单养会应激）
 6. 附加：singleMale 鱼种多尾互斗警告；低于 `minTankL` → 硬冲突提示
 
-### 6.6 密度校验（经验估算，不阻断）
+### 6.6 采购预算与包装折算
+
+```
+每件采购量 = ceil(实际用量 / 每包装容量)      // 恰好整除不多买；小数用量至少买 1 件
+多买余量   = 件数 × 每包装容量 − 实际用量
+该行花费   = 件数 × 每包单价                  // 单价未填 → 整行标记「待报价」，不参与合计
+折合单价   = 每包单价 / 每包装容量
+类别小计   = 该类各行花费之和（有任一行缺价则小计留空，只给已填项之和）
+总计       = 全部行花费之和（有任一行缺价则总计留空，绝不把缺价当 0 元）
+```
+
+- 用量量纲：底砂 kg（袋）、水草 株（盆）、矿物盐 g（包）、鱼 尾（群，群游鱼每群默认取 `minSchool`）。
+- 默认每包容量：底砂 9kg/袋、水草 6 株/盆、盐 500g/包、鱼 6 尾/群，均可在预算页直接改。
+- 两种底砂混用：每层（材质/厚度/坡度/密度）各算重量、预算与 BOM 各出一行；同种材质的层重量合并为一行。
+- 矿物盐仅在目标 GH > 自来水时出现，用量 `m(g) = ΔGH × 有效水量(L) / 盐的GH贡献`，盐种类可切换（用量与单价随之重算）。
+
+### 6.7 密度校验（经验估算，不阻断）
 
 - 小型鱼（平均成体 3cm）1cm/1L，大型鱼（10cm）1cm/2L，中间线性过渡；超标仅提示为建议。
 
@@ -165,8 +184,8 @@ npm run preview    # 预览构建产物：http://localhost:4173
 
 | 层级 | 框架 | 结果 | 覆盖 |
 |---|---|---|---|
-| 核心计算单测 | Vitest | **139/139 通过** | 50 组随机缸体/底砂与手工核算误差 ≤2%；20 组 GH 方向与公式；CO₂ 反解往返一致且带估算标注；24 组兼容性（攻击性×温和、体长差 5 倍、区间无交集、群游 3 尾等全部检出并给出原因）；密度超标提示不阻断；BOM 完整性 |
-| 组件交互测试 | Testing Library（含在 139 内） | 16 用例 | 方案创建、素材增删改、RO/加盐切换、兼容冲突检出、清单内容、SVG 导出 |
+| 核心计算单测 | Vitest | **163/163 通过** | 50 组随机缸体/底砂与手工核算误差 ≤2%；20 组 GH 方向与公式；CO₂ 反解往返一致且带估算标注；24 组兼容性（攻击性×温和、体长差 5 倍、区间无交集、群游 3 尾等全部检出并给出原因）；密度超标提示不阻断；BOM 完整性；采购预算 20 用例（向上取整/余量/缺价不按零/方案改动重算/两种底砂分行合并/盐包折算） |
+| 组件交互测试 | Testing Library（含在 163 内） | 20 用例 | 方案创建、素材增删改、RO/加盐切换、兼容冲突检出、清单内容、SVG 导出、预算填价出总计、改包装重算、混用底砂两行、盐种类切换 |
 | E2E | Playwright（Chromium） | preview **3/3**，容器 **4/4** | 验收主流程「设缸体→摆素材→算水质→查混养→导出清单」、方案持久化（刷新不丢）、素材库搜索、healthz |
 
 ```bash
@@ -206,10 +225,14 @@ type Item = { id: string; kind: 'hardscape'|'plant'; name: string;
 type Fish = { id: string; name: string; adultCm: number; minTankL: number; tempRange: [number, number];
               ghRange: [number, number]; phRange: [number, number]; temperament: 'peaceful'|'semi'|'aggressive';
               plantNip: boolean; schooling: boolean; minSchool?: number; singleMale?: boolean };
-type Plan = { id: string; name: string; tank: Tank; substrate: Substrate; items: Item[];
+type Plan = { id: string; name: string; tank: Tank; substrate: Substrate;
+              substrateLayers?: Substrate[] /* 混用底砂分层，缺省=单材质 */;
+              items: Item[];
               fishes: { fishId: string; count: number }[];
               water: { tapGh: number; tapKh: number; targetGh: number; targetCo2Ppm: number;
                        roomTempC: number; targetTempC: number };
+              costs?: { saltKey?: string /* 选用矿物盐 */;
+                        packaging: Record<string, { packSize: number; unitPrice?: number }> };
               updatedAt: number };
 ```
 
@@ -230,6 +253,7 @@ type Plan = { id: string; name: string; tank: Tank; substrate: Substrate; items:
 | 兼容性检查 | 30 组混养用例（攻击性+温和、体长差、区间无交集、群游不足）全部检出并给出原因 | ✅ tests/compatibility.test.ts |
 | 密度校验 | 超阈值给提示，不阻断，标注为建议 | ✅ tests/compatibility.test.ts |
 | 导出物料清单 | 底砂 kg、水草株数、鱼数、设备参数齐备；A4 打印排版 | ✅ tests/bom.test.ts + E2E |
+| 采购预算 | 按袋/盆/包/群向上取整，用量与买量并排、单列余量与折合单价；未填价标出不按零；总计+类别小计；方案改动重算；两种底砂分行且同种合并 | ✅ tests/budget.test.ts + tests/app.test.tsx + E2E |
 | Docker | healthz 通、镜像 <60MB | ✅ 实测 21.9MB |
 | E2E 主流程 | 设缸体→摆素材→算水质→查混养→导出物料清单 | ✅ e2e/planner.spec.ts |
 

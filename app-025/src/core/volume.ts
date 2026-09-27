@@ -1,4 +1,4 @@
-import type { Item, Substrate, Tank } from './types';
+import type { Item, Substrate, SubstrateLayer, Tank, Plan } from './types';
 
 /**
  * 水量与底砂计算（需求文档 §8 —— 最易算错的模块）。
@@ -30,6 +30,39 @@ export function substrateWeightKg(tank: Tank, sub: Substrate): number {
   return substrateVolumeL(tank, sub) * sub.densityKgPerL;
 }
 
+/** 取方案实际使用的底砂分层：混用时取 substrateLayers，单材质时退化为单层 */
+export function planSubstrateLayers(plan: Plan): SubstrateLayer[] {
+  return plan.substrateLayers && plan.substrateLayers.length > 0 ? plan.substrateLayers : [plan.substrate];
+}
+
+/** 方案全部底砂的总体积(L)（混用时各层相加） */
+export function planSubstrateVolumeL(plan: Plan): number {
+  return planSubstrateLayers(plan).reduce((s, l) => s + substrateVolumeL(plan.tank, l), 0);
+}
+
+/** 单层底砂体积(L) */
+export function substrateLayerVolumeL(tank: Tank, layer: SubstrateLayer): number {
+  return substrateVolumeL(tank, layer);
+}
+
+/** 单层底砂重量(kg) */
+export function substrateLayerWeightKg(tank: Tank, layer: SubstrateLayer): number {
+  return substrateWeightKg(tank, layer);
+}
+
+/**
+ * 合并多层底砂的"等效厚度/坡度"（仅用于侧视图示意：平均厚度相加，坡度取最大）。
+ * 注意：体积计算必须按层分别算后相加，不能用等效单层代替（各层密度不同）。
+ */
+export function combinedSubstrate(layers: SubstrateLayer[]): Substrate {
+  return {
+    kind: layers[0]?.kind ?? 'soil',
+    densityKgPerL: layers[0]?.densityKgPerL ?? 1.05,
+    thicknessMm: layers.reduce((s, l) => s + l.thicknessMm, 0),
+    slopeMm: layers.reduce((m, l) => Math.max(m, l.slopeMm), 0),
+  };
+}
+
 /** 素材排水体积估算（L）：按硬景观实际尺寸的包围盒 × 排水系数（石 0.55 / 木 0.3，可配） */
 export function hardscapeDisplacementL(items: Item[]): number {
   return items
@@ -51,6 +84,11 @@ export function effectiveVolumeL(tank: Tank, sub: Substrate, items: Item[]): num
     0,
     grossVolumeL(tank) - substrateVolumeL(tank, sub) - hardscapeDisplacementL(items),
   );
+}
+
+/** 方案有效水量（混用底砂时扣除所有分层的体积） */
+export function planEffectiveVolumeL(plan: Plan): number {
+  return Math.max(0, grossVolumeL(plan.tank) - planSubstrateVolumeL(plan) - hardscapeDisplacementL(plan.items));
 }
 
 /** 缸体水面面积（m²），用于光照估算 */
